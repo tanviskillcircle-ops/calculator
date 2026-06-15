@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- PRIMARY SEO TAGS -->
+    <title>Career & Salary Calculator | SkillCircle - Find Your Take-Home ROI</title>
+    <meta name="description" content="Calculate your potential salary in Digital Marketing, Data Science, and UI/UX. Use SkillCircle's interactive career ROI calculator to find the best career path in India.">
+    <meta name="keywords" content="salary calculator digital marketing India, data analyst salary fresher, SkillCircle career calculator, skillcircle.in, ROI of digital marketing course">
+    <link rel="canonical" href="https://www.skillcircle.in/salary-career-calculator/">
+    
+    <!-- SOCIAL MEDIA (OPEN GRAPH) -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="SkillCircle Career & Salary ROI Calculator">
+    <meta property="og:description" content="Find your high-paying career path and calculate your salary potential with SkillCircle.">
+    <meta property="og:image" content="https://www.skillcircle.in/wp-content/uploads/2021/05/skillcircle-logo.png">
+
+    <!-- TAILWIND CSS & BRAND CONFIG -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'prussian-blue': '#002147',
+                        'supernova': '#FDC801',
+                    },
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                        display: ['Montserrat', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FONTS & ICONS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); }
+        input:focus, select:focus { border-color: #002147 !important; ring: 2px #002147; }
+        .custom-shadow { box-shadow: 0 20px 50px rgba(0, 33, 71, 0.1); }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #002147; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-[#F8FAFC] min-h-screen text-gray-900 font-sans">
+
+    <div id="root"></div>
+
+    <!-- REACT CORE -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- GOOGLE SHEETS CONFIG ---
+        const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxxG2cMc2Pi2_PnpeSiXvg2BANYGKWvSXJAWdr4p5blDQz7Gxwc3jX_uIPb4by3ZU3n0w/exec";
+
+        // --- LOOKUP DATA ---
+        const DATA = {
+            domains: {
+                digital_marketing: {
+                    label: "Digital Marketing",
+                    roles: ["SEO Specialist", "Performance Marketer", "Social Media Strategist", "Content Lead"],
+                    salary: { entry: [250000, 400000], mid: [600000, 1000000], senior: [1500000, 2500000] },
+                    roi: { fee: 15000, hike: 180000, months: 3 },
+                    url: "https://www.skillcircle.in/digital-marketing-course",
+                    icon: "trending-up"
+                },
+                data_science: {
+                    label: "Data Science & Analytics",
+                    roles: ["Data Analyst", "BI Developer", "ML Engineer", "Data Scientist"],
+                    salary: { entry: [400000, 700000], mid: [900000, 1800000], senior: [2000000, 4500000] },
+                    roi: { fee: 25000, hike: 350000, months: 4 },
+                    url: "https://www.skillcircle.in/data-science-course",
+                    icon: "bar-chart-2"
+                },
+                ui_ux: {
+                    label: "UI/UX & Graphic Design",
+                    roles: ["Product Designer", "UI Designer", "UX Researcher", "Visual Artist"],
+                    salary: { entry: [300000, 550000], mid: [700000, 1300000], senior: [1800000, 3000000] },
+                    roi: { fee: 18000, hike: 220000, months: 3 },
+                    url: "https://www.skillcircle.in/ui-ux-design-course",
+                    icon: "layout"
+                }
+            },
+            multipliers: { metro: 1.0, tier2: 0.8, tier3: 0.65 }
+        };
+
+        // --- HELPER COMPONENTS ---
+        const Icon = ({ name, className }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [step, setStep] = useState(1);
+            const [leadUnlocked, setLeadUnlocked] = useState(false);
+            const [showLeadModal, setShowLeadModal] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [form, setForm] = useState({ education: '', income: '', city: '', interest: '', goal: '' });
+            const [user, setUser] = useState({ name: '', email: '', phone: '' });
+
+            const recommendation = useMemo(() => {
+                if (step < 4) return null;
+                const base = DATA.domains[form.interest] || DATA.domains.digital_marketing;
+                const mult = DATA.multipliers[form.city] || 1.0;
+                const adjust = (range) => range.map(v => Math.round(v * mult));
+                return { ...base, salary: { entry: adjust(base.salary.entry), mid: adjust(base.salary.mid), senior: adjust(base.salary.senior) } };
+            }, [form, step]);
+
+            useEffect(() => {
+                if (step === 4 && !leadUnlocked) {
+                    const timer = setTimeout(() => setShowLeadModal(true), 3000);
+                    return () => clearTimeout(timer);
+                }
+            }, [step, leadUnlocked]);
+
+            const next = () => setStep(s => s + 1);
+            const back = () => setStep(s => s - 1);
+            const format = (n) => `₹${(n / 100000).toFixed(1)}L`;
+
+            const handleFinalSubmit = async (e) => {
+                if (e) e.preventDefault();
+                if (!user.name || !user.email || !user.phone) {
+                    alert("Please fill in all details to unlock your roadmap.");
+                    return;
+                }
+                
+                setIsSubmitting(true);
+                
+                const payload = {
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    recommended_domain: recommendation.label,
+                    city: form.city,
+                    education: form.education
+                };
+
+                try {
+                    // Send to Google Sheet via Apps Script
+                    await fetch(GOOGLE_SHEET_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', // Essential for Google Apps Script Web App
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    setLeadUnlocked(true);
+                    setShowLeadModal(false);
+                } catch (error) {
+                    console.error("Submission error:", error);
+                    // Even if fetch fails due to CORS, Google Apps Script often receives the data.
+                    // For better UX, we assume success or handle locally.
+                    setLeadUnlocked(true);
+                    setShowLeadModal(false);
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            return (
+                <div className="flex flex-col min-h-screen">
+                    {/* NAVBAR */}
+                    <nav className="bg-prussian-blue text-white p-6 sticky top-0 z-40 shadow-lg">
+                        <div className="max-w-5xl mx-auto flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-supernova rounded-md"></div>
+                                <span className="text-2xl font-black uppercase font-display tracking-tight">SkillCircle</span>
+                            </div>
+                            <span className="hidden md:block text-xs font-bold uppercase tracking-widest opacity-60">Integrated Lead Capture Tool</span>
+                        </div>
+                    </nav>
+
+                    {/* MAIN CONTENT */}
+                    <main className="flex-grow container mx-auto px-4 py-12 max-w-4xl">
+                        {/* PROGRESS BAR */}
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full mb-10 overflow-hidden">
+                            <div className="h-full bg-supernova transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }}></div>
+                        </div>
+
+                        <div className="glass border border-white rounded-[2.5rem] p-8 md:p-14 custom-shadow relative overflow-hidden">
+                            {/* STEP 1: ABOUT YOU */}
+                            {step === 1 && (
+                                <div className="fade-in space-y-8">
+                                    <div className="space-y-2">
+                                        <h1 className="text-4xl font-bold font-display text-prussian-blue">Let's start with you.</h1>
+                                        <p className="text-gray-500">Tell us your background to personalize your salary projection.</p>
+                                    </div>
+                                    <div className="grid gap-6">
+                                        <div>
+                                            <label className="block text-sm font-bold text-prussian-blue mb-2">Education Status</label>
+                                            <select className="w-full p-4 border rounded-2xl bg-white outline-none" value={form.education} onChange={e => setForm({...form, education: e.target.value})}>
+                                                <option value="">Select Option</option>
+                                                <option value="pursuing">Pursuing Graduation</option>
+                                                <option value="completed">Completed Graduation</option>
+                                                <option value="postgrad">Postgraduate</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-prussian-blue mb-2">Current Location</label>
+                                            <select className="w-full p-4 border rounded-2xl bg-white outline-none" value={form.city} onChange={e => setForm({...form, city: e.target.value})}>
+                                                <option value="">Select Location</option>
+                                                <option value="metro">Tier 1 / Metro (Delhi, Mumbai, etc.)</option>
+                                                <option value="tier2">Tier 2 City</option>
+                                                <option value="tier3">Tier 3 / Others</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button disabled={!form.education || !form.city} onClick={next} className="w-full bg-supernova text-prussian-blue py-5 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] transition-transform disabled:opacity-30">Continue</button>
+                                </div>
+                            )}
+
+                            {/* STEP 2: INTERESTS */}
+                            {step === 2 && (
+                                <div className="fade-in space-y-8">
+                                    <h2 className="text-3xl font-bold font-display text-prussian-blue">Which path excites you?</h2>
+                                    <div className="grid md:grid-cols-3 gap-4">
+                                        {Object.entries(DATA.domains).map(([key, d]) => (
+                                            <button key={key} onClick={() => setForm({...form, interest: key})} className={`p-6 border-2 rounded-[2rem] text-left transition-all ${form.interest === key ? 'border-prussian-blue bg-blue-50' : 'hover:border-gray-300'}`}>
+                                                <Icon name={d.icon} className="w-8 h-8 text-prussian-blue mb-4" />
+                                                <p className="font-bold text-sm leading-tight">{d.label}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={back} className="flex-1 py-5 border rounded-2xl font-bold text-gray-500">Back</button>
+                                        <button disabled={!form.interest} onClick={next} className="flex-[2] bg-supernova text-prussian-blue py-5 rounded-2xl font-black uppercase tracking-widest disabled:opacity-30">Next Step</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* STEP 3: GOALS */}
+                            {step === 3 && (
+                                <div className="fade-in space-y-8">
+                                    <h2 className="text-3xl font-bold font-display text-prussian-blue">What is your career goal?</h2>
+                                    <div className="grid gap-3">
+                                        {['High Salary Potential', 'Quick Job Placement', 'Freelance & Remote Work', 'Creative Growth'].map(goal => (
+                                            <button key={goal} onClick={() => setForm({...form, goal: goal})} className={`p-5 border-2 rounded-2xl text-left font-bold ${form.goal === goal ? 'border-prussian-blue bg-blue-50' : 'hover:border-gray-200'}`}>
+                                                {goal}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={back} className="flex-1 py-5 border rounded-2xl font-bold text-gray-500">Back</button>
+                                        <button disabled={!form.goal} onClick={next} className="flex-[2] bg-prussian-blue text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl">Calculate ROI →</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* STEP 4: RESULTS */}
+                            {step === 4 && (
+                                <div className="fade-in space-y-10">
+                                    <div className="text-center">
+                                        <h2 className="text-4xl font-bold font-display text-prussian-blue">Your Career Forecast</h2>
+                                        <p className="text-gray-500">Based on industry data for {form.city.toUpperCase()}</p>
+                                    </div>
+
+                                    {/* SALARY CARD */}
+                                    <div className="bg-prussian-blue text-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative">
+                                        <div className="flex items-center gap-4 mb-10">
+                                            <div className="bg-supernova p-4 rounded-2xl text-prussian-blue"><Icon name={recommendation.icon} className="w-10 h-10" /></div>
+                                            <div>
+                                                <h3 className="text-2xl font-black tracking-tight">{recommendation.label}</h3>
+                                                <p className="text-white/60 text-sm">Primary Recommendation</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid md:grid-cols-2 gap-12">
+                                            <div className="space-y-6">
+                                                <h4 className="text-supernova font-bold uppercase text-xs tracking-widest">Expected Salary Slabs</h4>
+                                                <div className="space-y-4">
+                                                    {['entry', 'mid', 'senior'].map(lvl => (
+                                                        <div key={lvl} className="flex justify-between border-b border-white/10 pb-2">
+                                                            <span className="capitalize text-white/70">{lvl} Level</span>
+                                                            <span className="font-bold">{format(recommendation.salary[lvl][0])} - {format(recommendation.salary[lvl][1])}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
+                                                <h4 className="text-supernova font-bold uppercase text-xs tracking-widest mb-4">SkillCircle Advantage</h4>
+                                                <div className="grid grid-cols-2 gap-6">
+                                                    <div><p className="text-xs opacity-60">Avg. Annual Hike</p><p className="text-xl font-black">{format(recommendation.roi.hike)}</p></div>
+                                                    <div><p className="text-xs opacity-60">ROI Break-even</p><p className="text-xl font-black">{recommendation.roi.months} Months</p></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* ROADMAP SECTION */}
+                                    {leadUnlocked ? (
+                                        <div className="fade-in bg-white border-2 border-dashed border-gray-200 rounded-[2rem] p-8">
+                                            <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Icon name="map" className="text-supernova" /> Your 12-Week Roadmap</h3>
+                                            <div className="space-y-6">
+                                                <div className="flex gap-4"><div className="w-8 h-8 rounded-full bg-prussian-blue text-white flex items-center justify-center font-bold text-xs shrink-0">01</div><p className="text-sm"><b>Basics:</b> Master {recommendation.label} fundamentals and toolsets.</p></div>
+                                                <div className="flex gap-4"><div className="w-8 h-8 rounded-full bg-prussian-blue text-white flex items-center justify-center font-bold text-xs shrink-0">02</div><p className="text-sm"><b>Projects:</b> Work on 10+ live assignments with mentors.</p></div>
+                                                <div className="flex gap-4"><div className="w-8 h-8 rounded-full bg-prussian-blue text-white flex items-center justify-center font-bold text-xs shrink-0">03</div><p className="text-sm"><b>Placement:</b> Guaranteed interview preparation and job assistance.</p></div>
+                                            </div>
+                                            <a href={recommendation.url} target="_blank" className="mt-8 block text-center bg-supernova text-prussian-blue py-4 rounded-xl font-black uppercase tracking-widest">A Click Towards your Success</a>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center">
+                                            <button onClick={() => setShowLeadModal(true)} className="bg-supernova text-prussian-blue px-10 py-5 rounded-2xl font-black text-xl hover:scale-105 transition-transform shadow-xl">🔓 Unlock Full Roadmap</button>
+                                            <p className="mt-4 text-xs text-gray-400">Your details will be securely saved to our Google Sheet database.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* LEAD MODAL */}
+                    {showLeadModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-prussian-blue/90 backdrop-blur-sm" onClick={() => !isSubmitting && setShowLeadModal(false)}></div>
+                            <div className="relative bg-white rounded-[2.5rem] p-10 max-w-lg w-full fade-in overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-2 bg-supernova"></div>
+                                <h3 className="text-3xl font-bold text-prussian-blue mb-2">Claim Your Roadmap</h3>
+                                <p className="text-gray-500 mb-8 text-sm">Enter details to unlock your personalized learning path and 1:1 counseling. Data is synced with Google Sheets.</p>
+                                <form onSubmit={handleFinalSubmit} className="space-y-4">
+                                    <input required className="w-full p-4 bg-gray-50 border rounded-xl outline-none" placeholder="Full Name" value={user.name} onChange={e => setUser({...user, name: e.target.value})} />
+                                    <input required type="email" className="w-full p-4 bg-gray-50 border rounded-xl outline-none" placeholder="Email Address" value={user.email} onChange={e => setUser({...user, email: e.target.value})} />
+                                    <input required type="tel" pattern="[0-9]{10}" className="w-full p-4 bg-gray-50 border rounded-xl outline-none" placeholder="Phone (10-digit)" value={user.phone} onChange={e => setUser({...user, phone: e.target.value})} />
+                                    <button 
+                                        type="submit" 
+                                        disabled={isSubmitting} 
+                                        className="w-full bg-prussian-blue text-white py-5 rounded-xl font-black uppercase tracking-widest shadow-xl mt-4 flex items-center justify-center gap-3"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <div className="loader"></div>
+                                                Just a moment..
+                                            </>
+                                        ) : (
+                                            "Get Full Access"
+                                        )}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* FOOTER */}
+                    <footer className="bg-white border-t py-12 px-6 mt-auto">
+                        <div className="max-w-4xl mx-auto text-center space-y-6">
+                            <div className="flex justify-center items-center gap-2 grayscale opacity-40">
+                                <div className="w-6 h-6 bg-gray-600 rounded-md"></div>
+                                <span className="font-black uppercase text-xl">SkillCircle</span>
+                            </div>
+                            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Think Beyond Nine To Five</p>
+                            <p className="text-[10px] text-gray-400 max-w-lg mx-auto leading-relaxed">
+                                © 2026 SkillCircle (edtechbrand). Powered by skillcircle.in. 
+                                Integrated with Google Sheets API for lead management.
+                            </p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
